@@ -5,6 +5,9 @@ TagManager:
   serializedVersion: 3
   tags:
   - CameraTrigger
+  - Ice
+  - Portal
+  - Checkpoint
   layers:
   - Default
   - TransparentFX

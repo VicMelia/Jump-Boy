@@ -17,11 +17,28 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] float _groundCheckDistance = 0.7f;
     [SerializeField] float _maxChargeTime = 1.5f;
     bool _isJumping;
+    bool _isChargingJump;
     Vector2 _currentJumpDirection = Vector2.zero;
 
     [Header("Bounce Settings")]
     [SerializeField] private float _horizontalBounceMultiplier = 0.4f;
     [SerializeField] private float _verticalBounceMultiplier = 0.4f;
+
+    [Header("Ice settings")]
+    [SerializeField] private float _groundAccel = 35f;
+    [SerializeField] private float _groundDecel = 45f;
+
+    [SerializeField] private float _iceAccel = 10f;
+    [SerializeField] private float _iceDecel = 2f;
+    bool _isOnIce;
+
+    [Header("Teleport")]
+    [SerializeField] private float _teleportCooldown = 0.5f;
+    bool _canTeleport = true;
+
+    [Header("Reset Settings")]
+    private float _maxResetTimer = 2f;
+
 
     private void Awake()
     {
@@ -38,17 +55,23 @@ public class PlayerMovement : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        if (Input.GetKeyDown(KeyCode.R)) //Reset from last checkpoint
+        {
+            if(GameManager.Instance.lastCheckpoint != null) StartCoroutine(ResetFromCheckpoint());
+        }
+
         bool isGrounded = IsGrounded();
         if(isGrounded && _isJumping && _rb.linearVelocity.y < 0) _isJumping = false; //Raycast reset when falling
         if (_isJumping) return; //Input blocked while jumping
-        
-        Move();
+
         if (isGrounded)
         {
+            Move();
             if (Input.GetKeyDown(KeyCode.Space))
             {
                 StartCoroutine(ChargeJump());
             }
+            
         }
 
     }
@@ -57,12 +80,25 @@ public class PlayerMovement : MonoBehaviour
     {
         _lastVelocity = _rb.linearVelocity;
         if (_isJumping) return;
-        _rb.linearVelocity = new Vector2(_horizontalMovement * _speed, _rb.linearVelocity.y);
+        _speed = _isOnIce ? 15f : 5f;
+        float targetX = _horizontalMovement * _speed;
+        float accel;
+        if (targetX != 0) //acceleration
+        {
+            accel = _isOnIce ? _iceAccel : _groundAccel;
+        }
+        else //deceleration
+        {
+            accel = _isOnIce ? _iceDecel : _groundDecel;
+        }
+        float newX = Mathf.MoveTowards(_rb.linearVelocity.x, targetX, accel * Time.fixedDeltaTime);
+        _rb.linearVelocity = new Vector2(newX, _rb.linearVelocity.y);
     }
 
     private void Move()
     {
         _horizontalMovement = Input.GetAxisRaw("Horizontal");
+        if (_isChargingJump) _horizontalMovement = 0f;
         if (_horizontalMovement > 0)
         {
             _spriteRenderer.transform.rotation = Quaternion.Euler(0, 0, 0);
@@ -85,10 +121,12 @@ public class PlayerMovement : MonoBehaviour
 
     private IEnumerator ChargeJump()
     {
+        _isChargingJump = true;
         float elapsed = 0f;
         float jumpForce = 0f;
         while (Input.GetKey(KeyCode.Space))
         {
+            if(!IsGrounded()) StopCoroutine(ChargeJump()); //TO DO: Check if this works
             if (elapsed < _maxChargeTime)
             {
                 elapsed += Time.deltaTime;
@@ -99,12 +137,36 @@ public class PlayerMovement : MonoBehaviour
 
         }
 
+        _isChargingJump = false;
         Jump(jumpForce);
+    }
+
+    private IEnumerator ResetFromCheckpoint()
+    {
+        float elapsed = 0f;
+        while (Input.GetKey(KeyCode.R))
+        {
+          
+            if (elapsed < _maxResetTimer)
+            {
+                elapsed += Time.deltaTime;
+               
+            }
+            if (elapsed >= _maxResetTimer)
+            {
+                GameManager.Instance.LoadFromLastCheckpoint();
+                break;
+            }
+            yield return null;
+  
+        }
+
     }
 
     private bool IsGrounded()
     {
-        return Physics2D.Raycast(transform.position, Vector2.down, _groundCheckDistance, LayerMask.GetMask("Ground"));
+        return Physics2D.Raycast(transform.position, Vector2.down, _groundCheckDistance, LayerMask.GetMask("Ground")) 
+            || _rb.linearVelocity.magnitude < 0.1f;
     }
     void OnDrawGizmos()
     {
@@ -132,10 +194,40 @@ public class PlayerMovement : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D collision)
     {
+        if (collision.CompareTag("Ice"))
+        {
+            _isOnIce = true;
+        }
         if (collision.CompareTag("CameraTrigger"))
         {
             Camera cam = Camera.main;
             CameraManager.Instance.LerpCameraPosition(collision.transform.position);
         }
+        if (_canTeleport && collision.CompareTag("Portal")) //tp to next portal
+        {
+            _canTeleport = false;
+            transform.position = collision.GetComponent<PortalConnector>().nextPortal.position;
+            StartCoroutine(ResetTeleportTimer());
+        }
+
+        if (collision.CompareTag("Checkpoint")) //sets checkpoint
+        {
+            GameManager.Instance.SetCheckpoint(collision.transform);
+        }
+    }
+
+
+    private void OnTriggerExit2D(Collider2D collision)
+    {
+        if (collision.CompareTag("Ice"))
+        {
+            _isOnIce = false;
+        }
+    }
+
+    private IEnumerator ResetTeleportTimer()
+    {
+        yield return new WaitForSeconds(_teleportCooldown);
+        _canTeleport = true;
     }
 }
