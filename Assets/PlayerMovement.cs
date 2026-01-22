@@ -10,6 +10,7 @@ public class PlayerMovement : MonoBehaviour
     SpriteRenderer _spriteRenderer;
     bool _isRight = true;
     private Vector2 _lastVelocity;
+    Rigidbody2D _groundRb;
 
     [Header("Jump Settings")]
     [SerializeField] float _minJumpForce = 3f;
@@ -24,7 +25,7 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float _horizontalBounceMultiplier = 0.4f;
     [SerializeField] private float _verticalBounceMultiplier = 0.4f;
 
-    [Header("Ice settings")]
+    [Header("Ice Settings")]
     [SerializeField] private float _groundAccel = 35f;
     [SerializeField] private float _groundDecel = 45f;
 
@@ -32,12 +33,15 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float _iceDecel = 2f;
     bool _isOnIce;
 
-    [Header("Teleport")]
+    [Header("Teleport Settings")]
     [SerializeField] private float _teleportCooldown = 0.5f;
     bool _canTeleport = true;
 
     [Header("Reset Settings")]
-    private float _maxResetTimer = 2f;
+    [SerializeField] private float _maxResetTimer = 2f;
+
+    [Header("Bombs Settings")]
+    [SerializeField] private float _bombForce = 10f;
 
 
     private void Awake()
@@ -91,7 +95,8 @@ public class PlayerMovement : MonoBehaviour
         {
             accel = _isOnIce ? _iceDecel : _groundDecel;
         }
-        float newX = Mathf.MoveTowards(_rb.linearVelocity.x, targetX, accel * Time.fixedDeltaTime);
+        float platformX = (_groundRb != null) ? _groundRb.linearVelocity.x : 0f;
+        float newX = Mathf.MoveTowards(_rb.linearVelocity.x, targetX + platformX, accel * Time.fixedDeltaTime);
         _rb.linearVelocity = new Vector2(newX, _rb.linearVelocity.y);
     }
 
@@ -124,6 +129,7 @@ public class PlayerMovement : MonoBehaviour
         _isChargingJump = true;
         float elapsed = 0f;
         float jumpForce = 0f;
+        if (_isOnIce) _maxJumpForce *= 1.5f; //On ice jumps higher
         while (Input.GetKey(KeyCode.Space))
         {
             if(!IsGrounded()) StopCoroutine(ChargeJump()); //TO DO: Check if this works
@@ -165,8 +171,8 @@ public class PlayerMovement : MonoBehaviour
 
     private bool IsGrounded()
     {
-        return Physics2D.Raycast(transform.position, Vector2.down, _groundCheckDistance, LayerMask.GetMask("Ground")) 
-            || _rb.linearVelocity.magnitude < 0.1f;
+        if (Mathf.Abs(_rb.linearVelocity.y) < 0.01f) return true;
+        return Physics2D.Raycast(transform.position, Vector2.down, _groundCheckDistance, LayerMask.GetMask("Ground"));
     }
     void OnDrawGizmos()
     {
@@ -180,6 +186,7 @@ public class PlayerMovement : MonoBehaviour
     private void OnCollisionEnter2D(Collision2D collision)
     {
         if (IsGrounded()) return;
+
         Vector2 n = collision.GetContact(0).normal;
         if (n.y > 0.5f) return; //ground = nothing
 
@@ -190,6 +197,24 @@ public class PlayerMovement : MonoBehaviour
                 _lastVelocity.y * _verticalBounceMultiplier
             );
         }
+
+    }
+
+    private void OnCollisionStay2D(Collision2D col)
+    {
+        for (int i = 0; i < col.contactCount; i++) //Detects ground rb
+        {
+            if (col.GetContact(i).normal.y > 0.5f)
+            {
+                _groundRb = col.rigidbody;
+                return;
+            }
+        }
+    }
+
+    private void OnCollisionExit2D(Collision2D col)
+    {
+        if (col.rigidbody == _groundRb) _groundRb = null;
     }
 
     private void OnTriggerEnter2D(Collider2D collision)
@@ -213,6 +238,13 @@ public class PlayerMovement : MonoBehaviour
         if (collision.CompareTag("Checkpoint")) //sets checkpoint
         {
             GameManager.Instance.SetCheckpoint(collision.transform);
+        }
+
+
+        if (collision.CompareTag("Explosion")) //explosion colision
+        {
+            Vector3 launchDirection = transform.position - collision.transform.position;
+            _rb.AddForce(launchDirection.normalized * _bombForce, ForceMode2D.Impulse);
         }
     }
 
