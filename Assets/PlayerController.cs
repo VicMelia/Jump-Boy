@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using Unity.VisualScripting;
 using UnityEngine;
 
@@ -13,6 +14,11 @@ public class PlayerController : MonoBehaviour
     Rigidbody2D _groundRb;
     [SerializeField] private ParticleSystem _deathParticleSystem;
     Animator _anim;
+    [Header("Camera Settings")]
+    [SerializeField] private float _cameraCooldownTime = 0.1f;
+    bool _cameraOnCooldown;
+    private readonly List<Collider2D> _overlappedCameraTriggers = new List<Collider2D>();
+    private Collider2D _activeCameraTrigger = null;
 
     [Header("Jump Settings")]
     [SerializeField] float _minJumpForce = 3f;
@@ -32,7 +38,6 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float _attackRadius = 1f;
     [SerializeField] private LayerMask _enemyMask;
     [SerializeField] private float _cdTimer = 0f;
-    [SerializeField] private int attackDamage = 25;
     [SerializeField] private float _cdTime = 0.5f;
 
     [Header("Ice Settings")]
@@ -128,6 +133,14 @@ public class PlayerController : MonoBehaviour
         _rb.linearVelocity = new Vector2(newX, _rb.linearVelocity.y);
     }
 
+    private void LateUpdate()
+    {
+        _anim.SetBool("Grounded", IsGrounded());
+        if(GameManager.Instance.state == GameManager.GameState.Playing) _anim.SetFloat("Speed", Mathf.Abs(Input.GetAxisRaw("Horizontal")));
+        _anim.SetFloat("YVelocity", _rb.linearVelocity.y);
+
+    }
+
     private void Move()
     {
         _horizontalMovement = Input.GetAxisRaw("Horizontal");
@@ -147,6 +160,7 @@ public class PlayerController : MonoBehaviour
     private void Jump(float jumpForce)
     {
         _isJumping = true;
+        _anim.SetTrigger("Jump");
         _currentJumpDirection = new Vector2(jumpForce / 1.5f, jumpForce);
         if (!_isRight) _currentJumpDirection.x *= -1f; //left = inverted
         _rb.AddForce(_currentJumpDirection, ForceMode2D.Impulse);
@@ -155,6 +169,7 @@ public class PlayerController : MonoBehaviour
     private IEnumerator ChargeJump()
     {
         _isChargingJump = true;
+        _anim.SetTrigger("Charge");
         float elapsed = 0f;
         float jumpForce = 0f;
         if (_isOnIce) _maxJumpForce *= 1.5f; //On ice jumps higher
@@ -202,6 +217,8 @@ public class PlayerController : MonoBehaviour
             if (elapsed >= _maxResetTimer)
             {
                 Debug.Log("Hago algo");
+                _isJumping = false;
+                _isChargingJump = false;
                 if (GameManager.Instance.state == GameManager.GameState.GameOver) GameManager.Instance.RestartGame();
                 else GameManager.Instance.LoadFromLastCheckpoint();
                 break;
@@ -270,8 +287,10 @@ public class PlayerController : MonoBehaviour
         }
         if (collision.CompareTag("CameraTrigger"))
         {
-            Camera cam = Camera.main;
-            CameraManager.Instance.LerpCameraPosition(collision.transform.position);
+            if (!_overlappedCameraTriggers.Contains(collision))
+                _overlappedCameraTriggers.Add(collision);
+
+            TryUpdateActiveCameraTrigger(); 
         }
         if (_canTeleport && collision.CompareTag("Portal")) //tp to next portal
         {
@@ -292,7 +311,7 @@ public class PlayerController : MonoBehaviour
             _rb.AddForce(launchDirection.normalized * _bombForce, ForceMode2D.Impulse);
         }
 
-        if (collision.CompareTag("Death"))
+        if (GameManager.Instance.state != GameManager.GameState.GameOver && collision.CompareTag("Death"))
         {
             Die();
         }
@@ -310,6 +329,17 @@ public class PlayerController : MonoBehaviour
         {
             _isOnIce = false;
         }
+
+        if (collision.CompareTag("CameraTrigger"))
+        {
+            _overlappedCameraTriggers.Remove(collision);
+
+            if (_activeCameraTrigger == collision) //new camera
+            {
+                _activeCameraTrigger = null;
+                TryUpdateActiveCameraTrigger();
+            }
+        }
     }
 
     private IEnumerator ResetTeleportTimer()
@@ -323,6 +353,43 @@ public class PlayerController : MonoBehaviour
         _deathParticleSystem.Play();
         _spriteRenderer.enabled = false;
         GameManager.Instance.GameOver();
+    }
+
+    private void TryUpdateActiveCameraTrigger()
+    {
+        if (_cameraOnCooldown) return;
+        _overlappedCameraTriggers.RemoveAll(t => t == null || !t.gameObject.activeInHierarchy);
+        if (_overlappedCameraTriggers.Count == 0) return;
+
+        Collider2D best = null;
+        float bestDist = float.MaxValue;
+        Vector2 p = transform.position;
+
+        foreach (var t in _overlappedCameraTriggers) //distance to collider
+        {
+            Vector2 closest = t.ClosestPoint(p);
+            float d = (closest - p).sqrMagnitude;
+            if (d < bestDist)
+            {
+                bestDist = d;
+                best = t;
+            }
+        }
+
+        if (best != null && best != _activeCameraTrigger)
+        {
+            _activeCameraTrigger = best;
+            CameraManager.Instance.LerpCameraPosition(best.transform.position);
+            StartCoroutine(CameraTriggerCooldown());
+        }
+    }
+
+    private IEnumerator CameraTriggerCooldown()
+    {
+        _cameraOnCooldown = true;
+        yield return new WaitForSeconds(_cameraCooldownTime);
+        _cameraOnCooldown = false;
+        TryUpdateActiveCameraTrigger();
     }
 
 

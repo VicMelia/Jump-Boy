@@ -43,7 +43,7 @@ public class Enemy : MonoBehaviour
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        if (_isDead) return;
+        if (_isDead || GameManager.Instance.state == GameManager.GameState.GameOver) return;
         if (collision.gameObject.CompareTag("Player"))
         {
             PlayerController pc = collision.gameObject.GetComponent<PlayerController>();

@@ -58,6 +58,7 @@ public class GameManager : MonoBehaviour
         PlayerController pm = FindAnyObjectByType<PlayerController>();
         pm.GetComponentInChildren<SpriteRenderer>().enabled = true;
         pm.transform.position = lastCheckpoint.position;
+        state = GameState.Playing;
     }
 
     public void GameOver()
