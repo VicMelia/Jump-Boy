@@ -24661,6 +24661,7 @@ MonoBehaviour:
   _explosionCd: 2
   _particleSystem: {fileID: 7165680444605530060}
   _circleTrigger: {fileID: 8558173390772943765}
+  _bombClip: {fileID: 8300000, guid: 93b476f9e61ac8c45a5653c555ec9391, type: 3}
 --- !u!50 &8762217598588598977
 Rigidbody2D:
   serializedVersion: 5

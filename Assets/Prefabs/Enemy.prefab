@@ -114,6 +114,7 @@ MonoBehaviour:
   _speed: 2
   _moveDirection: {x: 1, y: 0}
   _maxDistance: 3
+  _dieClip: {fileID: 8300000, guid: 448414da52302ba4b8278473a901d57c, type: 3}
 --- !u!95 &5643769605816541676
 Animator:
   serializedVersion: 7

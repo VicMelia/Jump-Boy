@@ -7,6 +7,7 @@ public class Bomb : MonoBehaviour
     [SerializeField] private ParticleSystem _particleSystem;
 
     [SerializeField] private CircleCollider2D _circleTrigger;
+    [SerializeField] private AudioClip _bombClip;
     SpriteRenderer _spriteRenderer;
     Rigidbody2D _rb;
     bool _exploding;
@@ -44,6 +45,8 @@ public class Bomb : MonoBehaviour
         _spriteRenderer.enabled = false;
         _circleTrigger.gameObject.SetActive(true);
         _particleSystem.Play();
+        PlayerController pc = FindAnyObjectByType<PlayerController>();
+        if(Vector2.Distance(transform.position, pc.transform.position) < 10f) SFXManager.Instance.PlaySFX(_bombClip, transform.position, 0.25f);
         Destroy(gameObject, 1.2f);
     }
 }
