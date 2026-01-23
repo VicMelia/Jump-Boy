@@ -2,7 +2,7 @@ using System.Collections;
 using Unity.VisualScripting;
 using UnityEngine;
 
-public class PlayerMovement : MonoBehaviour
+public class PlayerController : MonoBehaviour
 {
     [SerializeField] float _speed = 5f;
     float _horizontalMovement;
@@ -11,6 +11,8 @@ public class PlayerMovement : MonoBehaviour
     bool _isRight = true;
     private Vector2 _lastVelocity;
     Rigidbody2D _groundRb;
+    [SerializeField] private ParticleSystem _deathParticleSystem;
+    Animator _anim;
 
     [Header("Jump Settings")]
     [SerializeField] float _minJumpForce = 3f;
@@ -24,6 +26,14 @@ public class PlayerMovement : MonoBehaviour
     [Header("Bounce Settings")]
     [SerializeField] private float _horizontalBounceMultiplier = 0.4f;
     [SerializeField] private float _verticalBounceMultiplier = 0.4f;
+
+    [Header("Attack Settings")]
+    [SerializeField] private Transform _attackTransform;
+    [SerializeField] private float _attackRadius = 1f;
+    [SerializeField] private LayerMask _enemyMask;
+    [SerializeField] private float _cdTimer = 0f;
+    [SerializeField] private int attackDamage = 25;
+    [SerializeField] private float _cdTime = 0.5f;
 
     [Header("Ice Settings")]
     [SerializeField] private float _groundAccel = 35f;
@@ -48,6 +58,7 @@ public class PlayerMovement : MonoBehaviour
     {
         _rb = GetComponent<Rigidbody2D>();
         _spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+        _anim = GetComponent<Animator>();
     }
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
@@ -63,6 +74,7 @@ public class PlayerMovement : MonoBehaviour
         {
             if(GameManager.Instance.lastCheckpoint != null) StartCoroutine(ResetFromCheckpoint());
         }
+        if (GameManager.Instance.state != GameManager.GameState.Playing) return;
 
         bool isGrounded = IsGrounded();
         if(isGrounded && _isJumping && _rb.linearVelocity.y < 0) _isJumping = false; //Raycast reset when falling
@@ -75,13 +87,29 @@ public class PlayerMovement : MonoBehaviour
             {
                 StartCoroutine(ChargeJump());
             }
-            
+        }
+        //Attack 
+        if (_cdTimer <= 0)
+        {
+            if (isGrounded && Input.GetKey(KeyCode.F))
+            {
+                Attack();
+            }
+        }
+        else
+        {
+            _cdTimer -= Time.deltaTime;
         }
 
     }
 
     private void FixedUpdate()
     {
+        if (GameManager.Instance.state != GameManager.GameState.Playing) 
+        {
+            _rb.linearVelocity = Vector2.zero;
+            return;
+        } 
         _lastVelocity = _rb.linearVelocity;
         if (_isJumping) return;
         _speed = _isOnIce ? 15f : 5f;
@@ -147,6 +175,19 @@ public class PlayerMovement : MonoBehaviour
         Jump(jumpForce);
     }
 
+    private void Attack()
+    {
+        _anim.SetTrigger("Attack");
+
+        Collider2D[] enemiesInRange = Physics2D.OverlapCircleAll(_attackTransform.position, _attackRadius, _enemyMask);
+        foreach (var enemy in enemiesInRange)
+        {
+            enemy.GetComponent<Enemy>().Die();
+        }
+
+        _cdTimer = _cdTime;
+    }
+
     private IEnumerator ResetFromCheckpoint()
     {
         float elapsed = 0f;
@@ -160,7 +201,9 @@ public class PlayerMovement : MonoBehaviour
             }
             if (elapsed >= _maxResetTimer)
             {
-                GameManager.Instance.LoadFromLastCheckpoint();
+                Debug.Log("Hago algo");
+                if (GameManager.Instance.state == GameManager.GameState.GameOver) GameManager.Instance.RestartGame();
+                else GameManager.Instance.LoadFromLastCheckpoint();
                 break;
             }
             yield return null;
@@ -181,6 +224,8 @@ public class PlayerMovement : MonoBehaviour
             transform.position,
             transform.position + Vector3.down * _groundCheckDistance
         );
+
+        Gizmos.DrawWireSphere(_attackTransform.position, _attackRadius);
     }
 
     private void OnCollisionEnter2D(Collision2D collision)
@@ -246,6 +291,16 @@ public class PlayerMovement : MonoBehaviour
             Vector3 launchDirection = transform.position - collision.transform.position;
             _rb.AddForce(launchDirection.normalized * _bombForce, ForceMode2D.Impulse);
         }
+
+        if (collision.CompareTag("Death"))
+        {
+            Die();
+        }
+
+        if (collision.CompareTag("Win"))
+        {
+            GameManager.Instance.GameOver();
+        }
     }
 
 
@@ -262,4 +317,13 @@ public class PlayerMovement : MonoBehaviour
         yield return new WaitForSeconds(_teleportCooldown);
         _canTeleport = true;
     }
+
+    public void Die()
+    {
+        _deathParticleSystem.Play();
+        _spriteRenderer.enabled = false;
+        GameManager.Instance.GameOver();
+    }
+
+
 }
