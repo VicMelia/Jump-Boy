@@ -178,7 +178,7 @@ public class PlayerController : MonoBehaviour
         _anim.SetTrigger("Charge");
         float elapsed = 0f;
         float jumpForce = 0f;
-        if (_isOnIce) _maxJumpForce = 12f; //On ice jumps higher
+        if (_isOnIce) _maxJumpForce = 20f; //On ice jumps higher
         while (Input.GetKey(KeyCode.Space))
         {
             if(!IsGrounded()) StopCoroutine(ChargeJump()); //TO DO: Check if this works

@@ -13,13 +13,13 @@ public class BackgroundManager : MonoBehaviour
     }
     void Update()
     {
-        if (_playerTransform.position.y < 23f)
+        if (_playerTransform.position.y < 21.7f)
         {
             _bg1.SetActive(true);
             _bg2.SetActive(false);
             _bg3.SetActive(false);
         }
-        else if (_playerTransform.position.y >= 22f && _playerTransform.position.y < 50.3f)
+        else if (_playerTransform.position.y >= 21.7f && _playerTransform.position.y < 50.3f)
         {
             _bg1.SetActive(false);
             _bg2.SetActive(true);

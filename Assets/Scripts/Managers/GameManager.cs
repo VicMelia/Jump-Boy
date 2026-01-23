@@ -12,6 +12,8 @@ public class GameManager : MonoBehaviour
     bool intro = true;
     private void Awake()
     {
+        Cursor.visible = false;
+        Cursor.lockState = CursorLockMode.Locked;
         Instance = this;
         StartCoroutine(IntroSequence());
 
@@ -24,7 +26,7 @@ public class GameManager : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-
+        if (Input.GetKeyDown(KeyCode.Escape)) Application.Quit();
     }
 
     private IEnumerator IntroSequence()
